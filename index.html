@@ -326,6 +326,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--text);m
       <div class="fgroup"><label>Pass type</label><input type="text" id="in-pass" placeholder="EP / S Pass..." autocomplete="off"></div>
     </div>
     <div class="fgroup"><label>Notes</label><input type="text" id="in-notes" placeholder="Optional — years in SG, industry..." autocomplete="off"></div>
+    <div class="fgroup"><label>Referred by</label><input type="text" id="in-referredby" placeholder="Who referred this client to you?" autocomplete="off"></div>
     <button class="submit-btn" onclick="startSession()">Start assessment ›</button>
     <button class="skip-btn" onclick="skipIntake()">Skip — continue without client details</button>
   </div>
@@ -558,11 +559,12 @@ function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.
 
 /* ═══════════════ INTAKE ═══════════════ */
 function skipIntake(){
-  currentClient={id:'c_'+Date.now(),name:'Walk-in client',email:'',phone:'',pass:'',notes:'',date:new Date().toISOString()};
+  currentClient={id:'c_'+Date.now(),name:'Walk-in client',email:'',phone:'',pass:'',notes:'',referredby:'',date:new Date().toISOString()};
   clState={};
   referrals=[];
   renderReferrals();
   document.getElementById('quick-export-btn').style.display='none';
+  document.getElementById('in-referredby').value='';
   document.getElementById('b-name').textContent='Walk-in client';
   document.getElementById('b-meta').textContent='No details provided · '+new Date().toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'});
   document.getElementById('sess-sub').textContent='Session: '+new Date().toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'});
@@ -585,13 +587,14 @@ function startSession(){
   if(!ok){showToast('Please fill in required fields','er');return}
   const pass=document.getElementById('in-pass').value.trim();
   const notes=document.getElementById('in-notes').value.trim();
-  currentClient={id:'c_'+Date.now(),name:fname+' '+lname,email,phone,pass,notes,date:new Date().toISOString()};
+  const referredby=document.getElementById('in-referredby').value.trim();
+  currentClient={id:'c_'+Date.now(),name:fname+' '+lname,email,phone,pass,notes,referredby,date:new Date().toISOString()};
   clState={};
   referrals=[];
   renderReferrals();
   document.getElementById('quick-export-btn').style.display='none';
   document.getElementById('b-name').textContent=currentClient.name+(pass?' · '+pass:'');
-  document.getElementById('b-meta').textContent=email+' · '+phone+(notes?' · '+notes:'');
+  document.getElementById('b-meta').textContent=email+' · '+phone+(referredby?' · Ref: '+referredby:'')+(notes?' · '+notes:'');
   document.getElementById('sess-sub').textContent='Session: '+new Date().toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'});
   setStor('ok','Ready');
   document.getElementById('save-btn').textContent='Save client session ›';
@@ -783,7 +786,7 @@ async function renderLog(){
       content.innerHTML=`<div class="log-empty">${!records.length?'No sessions saved yet. Complete an assessment and tap Save.':'No clients match your search.'}</div>`;
       return;
     }
-    content.innerHTML=`<table class="log-tbl"><thead><tr><th>Client</th><th>Contact</th><th>Pass</th><th>Saved</th><th>Device</th><th>Score</th><th>Fin. gaps</th><th></th></tr></thead><tbody>${filtered.map(r=>{
+    content.innerHTML=`<table class="log-tbl"><thead><tr><th>Client</th><th>Contact</th><th>Pass</th><th>Referred by</th><th>Saved</th><th>Device</th><th>Score</th><th>Fin. gaps</th><th></th></tr></thead><tbody>${filtered.map(r=>{
       const s=r.summary||{};const pct=s.score||0;const pc=pct>=70?'hi':pct>=40?'mi':'lo';
       const d=r.savedDate||new Date(r.savedAt).toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'});
       const t=r.savedTime||'';
@@ -793,6 +796,7 @@ async function renderLog(){
         <td style="font-weight:500">${r.name||'—'}</td>
         <td style="color:var(--text-sec);font-size:11px">${r.email||'—'}<br>${r.phone||'—'}</td>
         <td style="color:var(--text-sec)">${r.pass||'—'}</td>
+        <td style="color:var(--text-sec);font-size:11px">${r.referredby||'—'}</td>
         <td style="color:var(--text-muted);font-size:11px">${d}<br>${t}</td>
         <td style="font-size:11px;color:var(--text-sec)">${dev}</td>
         <td><span class="spill ${pc}">${pct}%</span></td>
@@ -810,7 +814,7 @@ async function renderLog(){
 
 async function reopenSession(id){
   const r=await sGet('prsc:'+id);if(!r)return;
-  currentClient={id:r.id,name:r.name,email:r.email,phone:r.phone,pass:r.pass,notes:r.notes,date:r.date};
+  currentClient={id:r.id,name:r.name,email:r.email,phone:r.phone,pass:r.pass,notes:r.notes,referredby:r.referredby||'',date:r.date};
   clState=r.responses||{};
   referrals=r.referrals||[];
   renderReferrals();
@@ -835,14 +839,14 @@ async function exportCSV(){
   records.sort((a,b)=>new Date(b.savedAt)-new Date(a.savedAt));
   if(!records.length){showToast('No records to export','er');return}
   const allItems=sections.flatMap(s=>s.items);
-  const headers=['Date','Time','Device','Name','Email','Phone','Pass type','Notes','Score %','Confirmed','Gaps','Pending','Fin. gap count','Fin. gap detail','Referral 1 Name','Referral 1 Phone','Referral 2 Name','Referral 2 Phone','Referral 3 Name','Referral 3 Phone'];
+  const headers=['Date','Time','Device','Name','Email','Phone','Pass type','Referred by','Notes','Score %','Confirmed','Gaps','Pending','Fin. gap count','Fin. gap detail','Referral 1 Name','Referral 1 Phone','Referral 2 Name','Referral 2 Phone','Referral 3 Name','Referral 3 Phone'];
   allItems.forEach(i=>headers.push(i.label));
   const rows=records.map(r=>{
     const s=r.summary||{};
     const refs=r.referrals||[];
     const d=r.savedDate||new Date(r.savedAt).toLocaleDateString('en-SG');
     const t=r.savedTime||new Date(r.savedAt).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:true});
-    const base=[d,t,r.device||'Unknown',r.name,r.email,r.phone,r.pass||'',r.notes||'',s.score||0,s.confirmed||0,s.gaps||0,s.pending||0,(s.financialGaps||[]).length,(s.financialGaps||[]).join(' | ')];
+    const base=[d,t,r.device||'Unknown',r.name,r.email,r.phone,r.pass||'',r.referredby||'',r.notes||'',s.score||0,s.confirmed||0,s.gaps||0,s.pending||0,(s.financialGaps||[]).length,(s.financialGaps||[]).join(' | ')];
     for(let ri=0;ri<3;ri++){base.push(refs[ri]?refs[ri].name:'');base.push(refs[ri]?refs[ri].phone:'');}
     base.push(refs.length>3?refs.slice(3).map(r=>r.name+' '+r.phone).join(' | '):'');
     allItems.forEach(i=>base.push(r.responses&&r.responses[i.id]?r.responses[i.id]:'—'));
@@ -942,6 +946,7 @@ async function syncToSheets(record){
       email:record.email||'',
       phone:record.phone||'',
       pass_type:record.pass||'',
+      referred_by:record.referredby||'',
       notes:record.notes||'',
       score_pct:s.score||0,
       confirmed:s.confirmed||0,
@@ -981,11 +986,8 @@ async function syncToSheets(record){
     } else {
       const err=await resp.text();
       console.error('Supabase error:',resp.status,err);
-      if(resp.status===404||resp.status===400){
-        showToast('Supabase table not found — see setup','er');
-      } else {
-        showToast('Supabase sync failed ('+resp.status+')','er');
-      }
+      showToast('Supabase error '+resp.status+' — open console for details','er');
+      alert('Supabase sync failed\nStatus: '+resp.status+'\nDetails: '+err.substring(0,200));
     }
   }catch(e){
     console.error('Sync error:',e);
